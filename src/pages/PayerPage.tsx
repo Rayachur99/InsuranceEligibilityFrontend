@@ -102,32 +102,49 @@ const PayerPage = () => {
     alert("Plan created");
   };
 
-  const loadRules = async () => {
+  const loadRules = async (silent = false) => {
+  console.log("loadRules clicked", rulePlanCode);
+
   if (!rulePlanCode.trim()) {
-    alert("Please enter a plan code first");
+    if (!silent) alert("Please enter a plan code first");
     return;
   }
 
   try {
+    console.log("calling backend...");
+
     const res = await apiClient.get(
       `/payer/plans/${rulePlanCode}/rules`
     );
+
+    console.log("response:", res.data);
+
     setExistingRules(res.data);
-  } catch (err: any) {
-    if (err.response?.status === 404) {
-      setExistingRules([]);
+
+    if (!silent && res.data.length === 0) {
       alert("No coverage rules found for this plan");
-    } else {
-      alert("Failed to load coverage rules");
+    }
+
+  } catch (err: any) {
+    console.error("loadRules error:", err);
+
+    if (!silent) {
+      alert(err.response?.data?.message || "Failed to load coverage rules");
     }
   }
 };
+
+
 
   const createRulesBulk = async () => {
     if (selectedServices.length === 0) {
       alert("Select at least one service");
       return;
     }
+if (minAge === "" || maxAge === "") {
+  alert("Min age and max age are required");
+  return;
+}
 
     try {
       await apiClient.post(`/payer/plans/${rulePlanCode}/rules/bulk`, {
@@ -140,9 +157,9 @@ const PayerPage = () => {
         })),
       });
 
-      alert("Coverage rules created");
-      resetRuleForm();
-      loadRules();
+    alert("Coverage rules created");
+    resetRuleForm();
+
     } catch (err: any) {
       if (err.response?.status === 409) {
         alert(
@@ -173,7 +190,7 @@ const PayerPage = () => {
 
     alert("Coverage rule updated");
     resetRuleForm();
-    loadRules();
+    loadRules(true);
   };
 
   const startEdit = (rule: CoverageRule) => {
@@ -225,51 +242,71 @@ const PayerPage = () => {
         value={rulePlanCode}
         onChange={e => setRulePlanCode(e.target.value)}
       />
-      <button onClick={loadRules}>Load Coverage Rules</button>
+<button onClick={() => loadRules()}>
+  Load Coverage Rules
+</button>
 
       {existingRules.length > 0 && (
         <>
           <h4>Existing Rules</h4>
           <ul>
-            {existingRules.map(rule => (
-              <li key={rule.serviceCode}>
-                {SERVICE_CODE_LABELS[rule.serviceCode]}
-                <button onClick={() => startEdit(rule)}>Edit</button>
-              </li>
-            ))}
-          </ul>
+  {existingRules.map(rule => (
+    <li key={rule.serviceCode}>
+      {SERVICE_CODE_LABELS[rule.serviceCode]}
+    </li>
+  ))}
+</ul>
+
         </>
       )}
 
       {ruleMode === "CREATE" && (
-        <div ref={dropdownRef} style={{ position: "relative", width: "320px" }}>
-          <div
-            style={{ border: "1px solid #ccc", padding: "8px", cursor: "pointer" }}
-            onClick={() => setIsDropdownOpen(p => !p)}
-          >
-            {selectedServices.length === 0
-              ? "Select Services"
-              : selectedServices.map(c => SERVICE_CODE_LABELS[c]).join(", ")}
-          </div>
+<div ref={dropdownRef} style={{ position: "relative", width: "320px" }}>
+  <div
+    style={{ border: "1px solid #ccc", padding: "8px", cursor: "pointer" }}
+    onClick={() => setIsDropdownOpen(p => !p)}
+  >
+    {selectedServices.length === 0
+      ? "Select Services"
+      : selectedServices.map(c => SERVICE_CODE_LABELS[c]).join(", ")}
+  </div>
 
-          {isDropdownOpen && (
-            <div style={{ border: "1px solid #ccc", background: "#fff" }}>
-              {Object.values(ServiceCode).map(code => (
-                <label key={code} style={{ display: "flex", padding: "6px" }}>
-                  <input
-                    type="checkbox"
-                    disabled={coveredServices.has(code)}
-                    checked={selectedServices.includes(code)}
-                    onChange={() => toggleService(code)}
-                  />
-                  <span style={{ marginLeft: "8px" }}>
-                    {SERVICE_CODE_LABELS[code]}
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+  {isDropdownOpen && (
+    <div style={{ border: "1px solid #ccc", background: "#fff" }}>
+      {Object.values(ServiceCode).map(code => {
+        const existing = existingRules.find(r => r.serviceCode === code);
+        const isEditing = editingService === code;
+        const isSelected = selectedServices.includes(code);
+
+        return (
+          <label key={code} style={{ display: "flex", padding: "6px" }}>
+            <input
+              type="checkbox"
+              checked={existing ? isEditing : isSelected}
+              onChange={() => {
+                if (existing) {
+                  startEdit(existing);
+                } else {
+if (editingService !== null) {
+  resetRuleForm();
+}
+
+                  toggleService(code);
+                }
+              }}
+            />
+
+            <span style={{ marginLeft: "8px" }}>
+              {SERVICE_CODE_LABELS[code]}
+              {existing && " (existing)"}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  )}
+</div>
+
       )}
 
       <label>
